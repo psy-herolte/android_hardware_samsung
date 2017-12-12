@@ -21,6 +21,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <utils/Log.h>
+#include <android/log.h>
 #include <pthread.h>
 #include "secril-client.h"
 #include <hardware_legacy/power.h> // For wakelock
@@ -1128,12 +1129,10 @@ static int SendOemRequestHookRaw(HRilClient client, int req_id, char *data, size
         goto error;
     }
 
-    // check if the handler for specified event is NULL and deregister token
-    // to prevent token pool overflow
-    if(!FindReqHandler(client_prv, token, &check_req_id)) {
-        FreeToken(&(client_prv->token_pool), token);
-        ClearReqHistory(client_prv, token);
-    }
+    // Samsung's blob (at least for the Galaxy S6) do not free the tokens
+    // properly, so do this right after request was sent.
+    FreeToken(&(client_prv->token_pool), token);
+    ClearReqHistory(client_prv, token);
 
     return RIL_CLIENT_ERR_SUCCESS;
 

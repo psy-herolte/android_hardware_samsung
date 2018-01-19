@@ -73,8 +73,8 @@
 #define SUPPORTS_IRQ_AFFINITY 0
 
 /*
- * ril_set_call_clock_sync() may cause unknown problems with the call-mic.
- * Uncomment this to disable the support for it.
+ * ril_set_call_clock_sync() can cause problems with changing
+ * call-volume and muting the mic in a call.
  */
 // #define DISABLE_CALL_CLOCK_SYNC
 

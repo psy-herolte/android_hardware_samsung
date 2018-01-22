@@ -38,6 +38,17 @@
 #include "audience.h"
 #endif
 
+/**
+ * container_of - cast a member of a structure out to the containing structure
+ * @ptr:    the pointer to the member.
+ * @type:   the type of the container struct this is embedded in.
+ * @member: the name of the member within the struct.
+ *
+ */
+#define container_of(ptr, type, member) ({              \
+    void *__mptr = (void *)(ptr);                   \
+    ((type *)((uintptr_t)__mptr - offsetof(type, member))); })
+
 static struct pcm_config pcm_config_voicecall = {
     .channels = 2,
     .rate = 8000,
@@ -160,6 +171,7 @@ static void stop_voice_session_bt_sco(struct voice_session *session) {
 void start_voice_session_bt_sco(struct voice_session *session)
 {
     struct pcm_config *voice_sco_config;
+    struct voice_data *vdata = container_of(session, struct voice_data, session);
 
     if (session->pcm_sco_rx != NULL || session->pcm_sco_tx != NULL) {
         ALOGW("%s: SCO PCMs already open!\n", __func__);
@@ -168,7 +180,7 @@ void start_voice_session_bt_sco(struct voice_session *session)
 
     ALOGV("%s: Opening SCO PCMs", __func__);
 
-    if (session->bluetooth_wb) {
+    if (vdata->bluetooth_wb) {
         ALOGV("%s: pcm_config wideband", __func__);
         voice_sco_config = &pcm_config_voice_sco_wb;
     } else {
@@ -372,25 +384,12 @@ bool voice_session_uses_twomic(struct voice_session *session)
     return session->two_mic_control;
 }
 
-void set_voice_session_bt_wideband(struct audio_device *adev, bool enable)
-{
-    struct voice_session *session =
-        (struct voice_session *)adev->voice.session;
-
-    session->bluetooth_wb = enable;
-
-    /* reopen the PCMs at the new rate */
-    if (adev->voice.in_call) {
-        ALOGE("%s: BT_CALL -- call active, restarting!", __func__);
-        stop_voice_call(adev);
-        start_voice_call(adev);
-    }
-}
-
 bool voice_session_uses_wideband(struct voice_session *session)
 {
+    struct voice_data *vdata = container_of(session, struct voice_data, session);
+
     if (session->out_device & AUDIO_DEVICE_OUT_ALL_SCO) {
-        return session->bluetooth_wb;
+        return vdata->bluetooth_wb;
     }
 
     return session->wb_amr_type >= 1;
@@ -476,8 +475,6 @@ struct voice_session *voice_session_init(struct audio_device *adev)
             ALOGV("%s: WB_AMR callback not supported", __func__);
         }
     }
-
-    session->bluetooth_wb = false;
 
     return session;
 }

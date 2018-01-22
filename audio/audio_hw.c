@@ -4166,11 +4166,10 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
                             value,
                             sizeof(value));
     if (ret >= 0) {
-        ALOGE("%s: BT_CALL -- BT_SCO_WB param, value=%s!", __func__, value);
         if (strcmp(value, AUDIO_PARAMETER_VALUE_ON) == 0) {
-            set_voice_session_bt_wideband(adev, true);
+            adev->voice.bluetooth_wb = true;
         } else {
-            set_voice_session_bt_wideband(adev, false);
+            adev->voice.bluetooth_wb = false;
         }
     }
 
@@ -4578,6 +4577,7 @@ static int adev_open(const hw_module_t *module, const char *name,
     adev->voice.volume = 1.0f;
     adev->voice.bluetooth_nrec = true;
     adev->voice.in_call = false;
+    adev->voice.bluetooth_wb = false;
 
     /* adev->cur_hdmi_channels = 0;  by calloc() */
     adev->snd_dev_ref_cnt = calloc(SND_DEVICE_MAX, sizeof(int));

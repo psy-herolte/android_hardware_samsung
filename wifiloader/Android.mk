@@ -19,7 +19,6 @@ endif
 
 LOCAL_MODULE := wifiloader
 LOCAL_MODULE_TAGS := optional
-LOCAL_VENDOR_MODULE := true
 
 include $(BUILD_EXECUTABLE)
 

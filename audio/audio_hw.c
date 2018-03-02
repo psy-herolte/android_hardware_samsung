@@ -539,7 +539,17 @@ static int mixer_init(struct audio_device *adev)
                 }
             } while (mixer == NULL);
 
-            sprintf(mixer_path, "/system/etc/mixer_paths_%d.xml", card);
+            sprintf(mixer_path, "/vendor/etc/mixer_paths_%d.xml", card);
+            if (access(mixer_path, F_OK) == -1) {
+                ALOGW("%s: Failed to open mixer paths from %s, retrying with legacy location",
+                      __func__, mixer_path);
+                sprintf(mixer_path, "/system/etc/mixer_paths_%d.xml", card);
+                if (access(mixer_path, F_OK) == -1) {
+                    ALOGE("%s: Failed to load a mixer paths configuration, your system will crash",
+                          __func__);
+                }
+            }
+
             audio_route = audio_route_init(card, mixer_path);
             if (!audio_route) {
                 ALOGE("%s: Failed to init audio route controls for card %d, aborting.",
@@ -2512,10 +2522,7 @@ int disable_output_path_l(struct stream_out *out)
              __func__, out->usecase);
         return -EINVAL;
     }
-
-    if (!out->dev->voice.in_call) {
-        disable_snd_device(adev, uc_info, uc_info->out_snd_device, true);
-    }
+    disable_snd_device(adev, uc_info, uc_info->out_snd_device, true);
     uc_release_pcm_devices(uc_info);
     list_remove(&uc_info->adev_list_node);
     free(uc_info);
@@ -2542,10 +2549,7 @@ int enable_output_path_l(struct stream_out *out)
     uc_select_pcm_devices(uc_info);
 
     list_add_tail(&adev->usecase_list, &uc_info->adev_list_node);
-
-    if (!out->dev->voice.in_call) {
-        select_devices(adev, out->usecase);
-    }
+    select_devices(adev, out->usecase);
 
     return 0;
 }
@@ -2922,28 +2926,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
                 else {
                     if (out->usecase == USECASE_AUDIO_PLAYBACK_OFFLOAD)
                         out_set_offload_parameters(adev, uc_info);
-
-                    /*
-                     * Make sure we do not do any refcounting while in a call!
-                     */
-                    if (adev->mode == AUDIO_MODE_IN_CALL &&
-                        !adev->voice.in_call) {
-                        /*
-                         * If we are starting a voice call, stop playback, do
-                         * not enable a device.
-                         */
-                        if (uc_info->out_snd_device != SND_DEVICE_NONE) {
-                            disable_snd_device(adev, uc_info,
-                                               uc_info->out_snd_device, true);
-                        }
-                    } else if (adev->mode != AUDIO_MODE_IN_CALL &&
-                               !adev->voice.in_call) {
-                        /*
-                         * Do not change devices while in a call, [stop|start]_voice_call
-                         * will do that for us.
-                         */
-                        select_devices(adev, out->usecase);
-                    }
+                    select_devices(adev, out->usecase);
                 }
             }
 
@@ -3208,11 +3191,11 @@ false_alarm:
                 }
                 frames_rq = bytes / frame_size;
                 frames_wr = pcm_device->res_byte_count / frame_size;
-                ALOGVV("%s: resampler request frames = %d frame_size = %d",
+                ALOGVV("%s: resampler request frames = %zd frame_size = %zd",
                     __func__, frames_rq, frame_size);
                 pcm_device->resampler->resample_from_input(pcm_device->resampler,
                     (int16_t *)buffer, &frames_rq, (int16_t *)pcm_device->res_buffer, &frames_wr);
-                ALOGVV("%s: resampler output frames_= %d", __func__, frames_wr);
+                ALOGVV("%s: resampler output frames_= %zd", __func__, frames_wr);
             }
             if (pcm_device->pcm) {
 #ifdef PREPROCESSING_ENABLED
@@ -3225,7 +3208,7 @@ false_alarm:
                     out->echo_reference->write(out->echo_reference, &b);
                  }
 #endif
-                ALOGVV("%s: writing buffer (%d bytes) to pcm device", __func__, bytes);
+                ALOGVV("%s: writing buffer (%zd bytes) to pcm device", __func__, bytes);
                 if (pcm_device->resampler && pcm_device->res_buffer)
                     pcm_device->status =
                         pcm_write(pcm_device->pcm, (void *)pcm_device->res_buffer,

@@ -1941,6 +1941,17 @@ Return<void> RadioImpl::setInitialAttachApn(int32_t serial, const DataProfileInf
             return Void();
         }
 
+#ifdef NEEDS_ROAMING_PROTOCOL_FIELD
+        if (!copyHidlStringToRil(&iaa.roamingProtocol, dataProfileInfo.roamingProtocol, pRI)) {
+            memsetAndFreeStrings(4, iaa.apn, iaa.protocol, iaa.username, iaa.roamingProtocol);
+            return Void();
+        }
+#endif
+
+#ifdef NEEDS_IMS_TYPE_FIELD
+        iaa.imsType = 0;
+#endif
+
         CALL_ONREQUEST(RIL_REQUEST_SET_INITIAL_ATTACH_APN, &iaa, sizeof(iaa), pRI, mSlotId);
 
         memsetAndFreeStrings(4, iaa.apn, iaa.protocol, iaa.username, iaa.password);
@@ -2394,6 +2405,19 @@ Return<void> RadioImpl::setDataProfile(int32_t serial, const hidl_vec<DataProfil
             }
             if (success && !copyHidlStringToRil(&dataProfiles[i].password, profiles[i].password,
                     pRI)) {
+                success = false;
+            }
+
+            // FIXUP: at least the libsec-ril on zero can't handle user and password
+            // being passed as NULL-pointers. Copy an empty string into it to work around
+            static hidl_string HIDL_EMPTY = hidl_string("");
+
+            if (success && dataProfiles[i].user == NULL && !copyHidlStringToRil(
+                    &dataProfiles[i].user, HIDL_EMPTY, pRI)) {
+                success = false;
+            }
+            if (success && dataProfiles[i].password == NULL && !copyHidlStringToRil(
+                    &dataProfiles[i].password, HIDL_EMPTY, pRI)) {
                 success = false;
             }
 
@@ -3268,7 +3292,8 @@ int radio::getSignalStrengthResponse(int slotId,
         SignalStrength signalStrength = {};
         if (response == NULL || (responseLen != sizeof(RIL_SignalStrength_v10)
                 && responseLen != sizeof(RIL_SignalStrength_v8)
-                && responseLen != sizeof(RIL_SignalStrength_v6))) {
+                && responseLen != sizeof(RIL_SignalStrength_v6)
+                && responseLen != sizeof(RIL_SignalStrength_v5))) {
             RLOGE("getSignalStrengthResponse: Invalid response");
             if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
         } else {
@@ -3706,7 +3731,7 @@ int radio::getOperatorResponse(int slotId,
     int mqanelements;
     char value[PROPERTY_VALUE_MAX];
     property_get("ro.ril.telephony.mqanelements", value, "4");
-	mqanelements = atoi(value);
+    mqanelements = atoi(value);
 
     if (radioService[slotId]->mRadioResponse != NULL) {
         RadioResponseInfo responseInfo = {};
@@ -3716,7 +3741,7 @@ int radio::getOperatorResponse(int slotId,
         hidl_string numeric;
         int numStrings = responseLen / sizeof(char *);
         if (response == NULL || numStrings != mqanelements - 2) {
-            RLOGE("getOperatorResponse Invalid response: NULL");
+            RLOGE("getOperatorResponse Invalid response: NULL (numStrings is %d, mqanelements is %d)", numStrings, mqanelements);
             if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
 
         } else {

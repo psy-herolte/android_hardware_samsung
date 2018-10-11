@@ -1943,7 +1943,7 @@ Return<void> RadioImpl::setInitialAttachApn(int32_t serial, const DataProfileInf
 
 #ifdef NEEDS_ROAMING_PROTOCOL_FIELD
         if (!copyHidlStringToRil(&iaa.roamingProtocol, dataProfileInfo.roamingProtocol, pRI)) {
-            memsetAndFreeStrings(4, iaa.apn, iaa.protocol, iaa.username, iaa.roamingProtocol);
+            memsetAndFreeStrings(4, iaa.apn, iaa.protocol, iaa.username, iaa.password);
             return Void();
         }
 #endif
@@ -1954,7 +1954,12 @@ Return<void> RadioImpl::setInitialAttachApn(int32_t serial, const DataProfileInf
 
         CALL_ONREQUEST(RIL_REQUEST_SET_INITIAL_ATTACH_APN, &iaa, sizeof(iaa), pRI, mSlotId);
 
+#ifdef NEEDS_ROAMING_PROTOCOL_FIELD
+        memsetAndFreeStrings(5, iaa.apn, iaa.protocol, iaa.username, iaa.password,
+                iaa.roamingProtocol);
+#else
         memsetAndFreeStrings(4, iaa.apn, iaa.protocol, iaa.username, iaa.password);
+#endif
     } else {
         RIL_InitialAttachApn_v15 iaa = {};
 
@@ -2408,19 +2413,6 @@ Return<void> RadioImpl::setDataProfile(int32_t serial, const hidl_vec<DataProfil
                 success = false;
             }
 
-            // FIXUP: at least the libsec-ril on zero can't handle user and password
-            // being passed as NULL-pointers. Copy an empty string into it to work around
-            static hidl_string HIDL_EMPTY = hidl_string("");
-
-            if (success && dataProfiles[i].user == NULL && !copyHidlStringToRil(
-                    &dataProfiles[i].user, HIDL_EMPTY, pRI)) {
-                success = false;
-            }
-            if (success && dataProfiles[i].password == NULL && !copyHidlStringToRil(
-                    &dataProfiles[i].password, HIDL_EMPTY, pRI)) {
-                success = false;
-            }
-
             if (!success) {
                 freeSetDataProfileData(num, dataProfiles, dataProfilePtrs, 4,
                     &RIL_DataProfileInfo::apn, &RIL_DataProfileInfo::protocol,
@@ -2492,19 +2484,6 @@ Return<void> RadioImpl::setDataProfile(int32_t serial, const hidl_vec<DataProfil
             if (success && !convertMvnoTypeToString(profiles[i].mvnoType,
                     dataProfiles[i].mvnoType)) {
                 sendErrorResponse(pRI, RIL_E_INVALID_ARGUMENTS);
-                success = false;
-            }
-
-            // FIXUP: at least the libsec-ril on zero can't handle user and password
-            // being passed as NULL-pointers. Copy an empty string into it to work around
-            static hidl_string HIDL_EMPTY = hidl_string("");
-
-            if (success && dataProfiles[i].user == NULL && !copyHidlStringToRil(
-                    &dataProfiles[i].user, HIDL_EMPTY, pRI)) {
-                success = false;
-            }
-            if (success && dataProfiles[i].password == NULL && !copyHidlStringToRil(
-                    &dataProfiles[i].password, HIDL_EMPTY, pRI)) {
                 success = false;
             }
 
@@ -3630,8 +3609,7 @@ int radio::getVoiceRegistrationStateResponse(int slotId,
                if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
         } else if (s_vendorFunctions->version <= 14) {
             if (numStrings < 15) {
-                RLOGE("getVoiceRegistrationStateResponse Invalid response: numStrings < 15 (%d < 15)",
-						numStrings);
+                RLOGE("getVoiceRegistrationStateResponse Invalid response: NULL");
                 if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
             } else {
                 char **resp = (char **) response;
@@ -3649,9 +3627,8 @@ int radio::getVoiceRegistrationStateResponse(int slotId,
             RIL_VoiceRegistrationStateResponse *voiceRegState =
                     (RIL_VoiceRegistrationStateResponse *)response;
 
-            if (responseLen < sizeof(RIL_VoiceRegistrationStateResponse)) {
-                RLOGE("getVoiceRegistrationStateResponse Invalid response: responseLen < sizeof(RIL_VoiceRegistrationStateResponse) (%d < %d)",
-						responseLen, sizeof(RIL_VoiceRegistrationStateResponse));
+            if (responseLen != sizeof(RIL_VoiceRegistrationStateResponse)) {
+                RLOGE("getVoiceRegistrationStateResponse Invalid response: NULL");
                 if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
             } else {
                 voiceRegResponse.regState = (RegState) voiceRegState->regState;
@@ -3695,7 +3672,7 @@ int radio::getDataRegistrationStateResponse(int slotId,
         } else if (s_vendorFunctions->version <= 14) {
             int numStrings = responseLen / sizeof(char *);
             if (numStrings < 6) {
-                RLOGE("getDataRegistrationStateResponse Invalid response: numStrings < 6 (%d < 6)", numStrings);
+                RLOGE("getDataRegistrationStateResponse Invalid response: NULL");
                 if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
             } else {
                 char **resp = (char **) response;
@@ -3710,9 +3687,8 @@ int radio::getDataRegistrationStateResponse(int slotId,
             RIL_DataRegistrationStateResponse *dataRegState =
                     (RIL_DataRegistrationStateResponse *)response;
 
-            if (responseLen < sizeof(RIL_DataRegistrationStateResponse)) {
-                RLOGE("getDataRegistrationStateResponse Invalid response: responseLen < sizeof(RIL_DataRegistrationStateResponse) (%d < %d)",
-						responseLen, sizeof(RIL_DataRegistrationStateResponse));
+            if (responseLen != sizeof(RIL_DataRegistrationStateResponse)) {
+                RLOGE("getDataRegistrationStateResponse Invalid response: NULL");
                 if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
             } else {
                 dataRegResponse.regState = (RegState) dataRegState->regState;
@@ -3750,7 +3726,7 @@ int radio::getOperatorResponse(int slotId,
         hidl_string numeric;
         int numStrings = responseLen / sizeof(char *);
         if (response == NULL || numStrings < 3) {
-            RLOGE("getOperatorResponse Invalid response: NULL numStrings < 3 (numStrings < %d)", numStrings);
+            RLOGE("getOperatorResponse Invalid response: NULL");
             if (e == RIL_E_SUCCESS) responseInfo.error = RadioError::INVALID_RESPONSE;
 
         } else {

@@ -436,7 +436,7 @@ static int SendOemRequestHookRaw(HRilClient client, int req_id, char *data, size
     uint32_t header = 0;
     android::Parcel p;
     RilClientPrv *client_prv;
-    int maxfd = -1;
+    int __unused maxfd = -1;
 
     client_prv = (RilClientPrv *)(client->prv);
 
@@ -488,7 +488,7 @@ error:
 static void * RxReaderFunc(void *param) {
     RilClientPrv *client_prv = (RilClientPrv *)param;
     int maxfd = 0;
-    int token = 0;
+    int __unused token = 0;
     void *p_record = NULL;
     size_t recordlen = 0;
     int ret = 0;
